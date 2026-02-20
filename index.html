@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Plataforma EO – Operação Previdenciária (MVP Amigável)</title>
+<style>
+  :root{ --bg:#f8fafc; --card:#fff; --ink:#0f172a; --muted:#475569; --line:#e2e8f0;
+         --pri:#4f46e5; --rose:#be123c; --amber:#b45309; --emer:#047857; --sky:#0369a1; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  header{position:sticky;top:0;z-index:5;background:#ffffffcc;backdrop-filter:saturate(120%) blur(6px);border-bottom:1px solid var(--line)}
+  .wrap{max-width:1120px;margin:0 auto;padding:14px}
+  .brand{display:flex;gap:10px;align-items:center}
+  .logo{width:28px;height:28px;border-radius:8px;background:var(--pri)}
+  .tabs{display:flex;gap:6px}
+  .tab{padding:8px 12px;border-radius:10px;border:1px solid transparent;cursor:pointer}
+  .tab.active{background:#0f172a;color:#fff}
+  .tab:not(.active):hover{background:#f1f5f9}
+  h1{font-size:18px;margin:0 0 8px}
+  h2{font-size:16px;margin:10px 0 8px}
+  h3{font-size:13px;margin:8px 0;color:var(--muted)}
+  .grid{display:grid;gap:12px}
+  .g-3{grid-template-columns:repeat(3,1fr)}
+  .g-2{grid-template-columns:repeat(2,1fr)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;box-shadow:0 1px 4px #0000000a}
+  .pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px}
+  .p-default{background:#f1f5f9;color:#334155}
+  .p-warn{background:#fffbeb;color:#92400e}
+  .p-danger{background:#fff1f2;color:#be123c}
+  .p-success{background:#ecfdf5;color:#047857}
+  .p-info{background:#eff6ff;color:#0369a1}
+  .btn{border:0;border-radius:12px;padding:8px 12px;background:#0f172a;color:#fff;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  .btn.soft{background:#e2e8f0;color:#0f172a}
+  .btn.primary{background:var(--pri)}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  table{border-collapse:collapse;width:100%}
+  th,td{padding:8px;text-align:left;border-top:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600}
+  input,select,textarea{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:12px;outline:0}
+  label{display:block;font-size:12px;color:#475569;margin:6px 0 4px}
+  .split{display:grid;gap:12px}
+  @media(min-width:980px){ .split{grid-template-columns:1fr 1fr} }
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .stat{background:#f8fafc;border:1px solid var(--line);border-radius:16px;padding:12px}
+  .stat .v{font-size:22px;font-weight:800}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12px}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .kv{display:grid;grid-template-columns:160px 1fr;gap:6px 12px;margin:6px 0}
+  .kv b{color:#334155}
+  .timeline{border-left:2px solid #e2e8f0;margin-left:6px;padding-left:12px}
+  .titem{position:relative;margin:10px 0}
+  .titem:before{content:"";position:absolute;left:-10px;top:6px;width:8px;height:8px;border-radius:50%;background:#0f172a}
+  .empty{color:#64748b}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap" style="display:flex;justify-content:space-between;align-items:center">
+    <div class="brand"><div class="logo"></div><strong>Plataforma EO – Operação Previdenciária (MVP)</strong></div>
+    <nav class="tabs" id="tabs"></nav>
+  </div>
+</header>
+
+<main><div class="wrap" id="app"></div></main>
+
+<script>
+/** ------------------ STATE & MOCKS (dados de exemplo amigáveis) ------------------ **/
+const HOUR = 60*60*1000;
+const dueIn = (h)=> new Date(Date.now()+h*HOUR).toISOString();
+const fmtH = (iso)=> new Date(iso).toLocaleString();
+
+const SAMPLE_101 = {
+  idControleConsulta: "CONS-2025-0001",
+  instituicaoFinanceira: { nome: "IF Exemplo", cnpj: "00.000.000/0001-00" },
+  informacoesGarantia: {
+    tipoOperacao: "PREVIDENCIA",
+    entidadeOperadora: { nome: "EO Previdência", cnpj: "11.111.111/0001-11" },
+    garantidor: { nome: "João da Silva", cpf: "123.456.789-00", consentimento: true },
+    processoSusep: {
+      numero: "15414.999999/2025-10",
+      fundosInvestimentos: [
+        { id:"F1", nome:"Fundo Prev I", status:"SUCCESS" },
+        { id:"F2", nome:"Fundo Prev II", status:"FAIL", motivoRecusa:"DOMINIO_INVALIDO" }
+      ]
+    }
+  }
+};
+
+const SAMPLE_103 = {
+  idControleTrava: "TRV-2025-0007",
+  idGarantia: ["GRT-9001"],
+  bloqueio: { numeroContratoIF:"C-7788", dataContrato:"2025-10-01", prazoMeses:12 },
+  informacoesGarantia: {
+    tipoOperacao:"PREVIDENCIA",
+    entidadeOperadora:{ nome:"EO Previdência", cnpj:"11.111.111/0001-11" },
+    garantidor:{ nome:"João da Silva", cpf:"123.456.789-00" }
+  }
+};
+
+const SAMPLE_105 = {
+  idControleLiquidacao:"LIQ-2025-0033",
+  informacoesGarantia:{
+    tipoOperacao:"PREVIDENCIA",
+    entidadeOperadora:{ nome:"EO Previdência", cnpj:"11.111.111/0001-11" },
+    identificadorInstrumentoContratual:"IC-5555",
+    garantidor:{ nome:"João da Silva", cpf:"123.456.789-00" }
+  },
+  motivoLiquidacao:"RESGATE",
+  valorBrutoSolicitado:50000,
+  liquidacaoParcial:true,
+  baixaContrato:false
+};
+
+const SAMPLE_107 = {
+  dadosLiberacao:{
+    idControleLiberacao:"LIB-2025-0021",
+    dataSolicitacaoLiberacao:"2025-10-06",
+    instituicaoFinanceira:{ nome:"IF Exemplo", cnpj:"00.000.000/0001-00" },
+    tipoEnvioArquivos:"ANEXO"
+  },
+  informacoesGarantia:{
+    tipoOperacao:"PREVIDENCIA",
+    entidadeOperadora:{ nome:"EO Previdência", cnpj:"11.111.111/0001-11" },
+    processoSusep:{ fundosInvestimentos:[{ idGarantia:"GRT-9001", idGarantiaConsulta:"GC-7777" }] },
+    garantidor:{ nome:"João da Silva", cpf:"123.456.789-00" }
+  }
+};
+
+// tipo recebido -> tipo de resposta
+const RESPONSE_MAP = { "101":"102", "103":"104", "105":"106", "107":"108" };
+
+const STATE = {
+  tab:"dashboard",
+  cases:[
+    newCase("EO-2025-0001","101","Consulta de Garantias", SAMPLE_101, dueIn(30)),
+    newCase("EO-2025-0002","103","Bloqueio/Trava",       SAMPLE_103, dueIn(24)),
+    newCase("EO-2025-0003","105","Liquidação",            SAMPLE_105, dueIn(48)),
+    newCase("EO-2025-0004","107","Liberação",             SAMPLE_107, dueIn(36)),
+  ],
+  selectedId:null
+};
+
+function newCase(eoId,tipo,titulo,recebidos,sla){
+  return {
+    id: "c"+Math.random().toString(36).slice(2,7),
+    eoCaseId: eoId,
+    tipo, titulo, recebidos,
+    status:"RECEBIDO",
+    sla,
+    events:[
+      { at: new Date().toISOString(), kind:"RECEBIDO", note:`${tipo} recebido` }
+    ]
+  };
+}
+
+/** ------------------ UTILS ------------------ **/
+function el(tag, attrs={}, ...kids){
+  const e = document.createElement(tag);
+  for(const k in attrs){
+    if(k==="class") e.className = attrs[k];
+    else if(k==="html") e.innerHTML = attrs[k];
+    else if(k.startsWith("on") && typeof attrs[k]==="function") e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  kids.flat().forEach(ch=>{
+    if(ch==null) return;
+    if(typeof ch==="string"||typeof ch==="number") e.appendChild(document.createTextNode(ch));
+    else e.appendChild(ch);
+  });
+  return e;
+}
+const HOURMS = 60*60*1000;
+function fmtSLA(iso){
+  const diff = new Date(iso).getTime() - Date.now();
+  const sign = diff<0? "-":"";
+  const abs = Math.abs(diff);
+  const h = Math.floor(abs/HOURMS);
+  const m = Math.floor((abs%HOURMS)/(60*1000));
+  return { text:`${sign}${h}h ${m}m`, late: diff<0 };
+}
+function shallow(o){ return JSON.parse(JSON.stringify(o??{})); }
+function chip(label, value){ return el("span",{class:"chip"}, el("strong",{}, label+":"), " ", el("span",{class:"mono"}, value)); }
+
+/** ------------------ VALIDATION (amigável) ------------------ **/
+function validateByType(tipo, recebidos, form){
+  const e = {};
+  const ensure = (cond, path, msg) => { if(!cond) e[path] = msg || "Obrigatório"; };
+  const isPrev = (recebidos?.informacoesGarantia?.tipoOperacao==="PREVIDENCIA") || (recebidos?.dadosLiberacao && recebidos?.informacoesGarantia?.tipoOperacao==="PREVIDENCIA") || (tipo==="109");
+  if(!isPrev) e.scope = "Somente Previdência";
+
+  switch(tipo){
+    case "102":{
+      ensure(form?.dataConsulta, "dataConsulta", "Informe a data da consulta");
+      const fundos = form?.processoSusep?.fundosInvestimentos;
+      ensure(Array.isArray(fundos) && fundos.length>0, "processoSusep.fundosInvestimentos", "Informe ao menos 1 fundo");
+      if(Array.isArray(fundos)){
+        fundos.forEach((it,idx)=>{
+          ensure(it?.status, `fundos[${idx}].status`, "Status (SUCCESS/FAIL)");
+          if(it?.status==="FAIL"){ ensure(it?.motivoRecusa, `fundos[${idx}].motivoRecusa`, "Motivo da recusa"); }
+        });
+      }
+      break;
+    }
+    case "104":{
+      ensure(form?.dataBloqueio, "dataBloqueio", "Data do bloqueio");
+      ensure(form?.valorBrutoBloqueado>0, "valorBrutoBloqueado", "Valor bruto bloqueado");
+      ensure(form?.prioridade!=null && form?.prioridade!=="", "prioridade", "Ordem de prioridade");
+      break;
+    }
+    case "106":{
+      ensure(form?.dataLiquidacao, "dataLiquidacao", "Data da liquidação");
+      ensure(form?.previsaoPagamento, "previsaoPagamento", "Previsão de pagamento");
+      ensure(form?.valorLiquidoPrevisto>0, "valorLiquidoPrevisto", "Valor líquido previsto");
+      break;
+    }
+    case "108":{
+      ensure(form?.valorBrutoSolicitado>0, "valorBrutoSolicitado", "Valor solicitado");
+      ensure(["SIM","NAO"].includes(form?.liberacaoParcial??""), "liberacaoParcial", "Selecione SIM/NÃO");
+      ensure(["SIM","NAO"].includes(form?.baixaContrato??""), "baixaContrato", "Selecione SIM/NÃO");
+      ensure(form?.dataRealizacaoDesbloqueio, "dataRealizacaoDesbloqueio", "Data de desbloqueio");
+      ensure(["SUCCESS","FAIL"].includes(form?.status??""), "status", "SUCCESS/FAIL");
+      if(form?.status==="FAIL") ensure(form?.motivoRecusa, "motivoRecusa", "Motivo da recusa");
+      break;
+    }
+    case "109":{
+      ensure(form?.garantidor?.nome, "garantidor.nome", "Nome do garantidor");
+      ensure(form?.garantidor?.cpf, "garantidor.cpf", "CPF do garantidor");
+      ensure(Array.isArray(form?.instituicoesFinanceiras) && form.instituicoesFinanceiras.length>0, "instituicoesFinanceiras", "Inclua ao menos 1 IF");
+      ensure(["ANEXO","UPLOAD","GERACAO_PDF"].includes(form?.tipoEnvioArquivos??""), "tipoEnvioArquivos", "Tipo de envio");
+      if(form?.tipoEnvioArquivos==="GERACAO_PDF"){ ensure(form?.enderecoCompleto, "enderecoCompleto", "Endereço para geração de PDF"); }
+      break;
+    }
+  }
+  return e;
+}
+
+/** ------------------ RENDER ------------------ **/
+function render(){
+  renderTabs();
+  const app = document.getElementById("app");
+  app.innerHTML = "";
+  if(STATE.tab==="dashboard") app.appendChild(renderDashboard());
+  if(STATE.tab==="inbox") app.appendChild(renderInbox());
+  if(STATE.tab==="case") app.appendChild(renderCase());
+}
+function setTab(k){ STATE.tab=k; render(); }
+
+function renderTabs(){
+  const tabs = [
+    {k:"dashboard", label:"Dashboard"},
+    {k:"inbox", label:"Inbox"},
+    {k:"case", label:"Caso"},
+  ];
+  const nav = document.getElementById("tabs");
+  nav.innerHTML = "";
+  tabs.forEach(t=>{
+    nav.appendChild(el("button", {class:"tab "+(STATE.tab===t.k?"active":""), onclick:()=>setTab(t.k)}, t.label));
+  });
+}
+
+function statusKind(st){ return ({RECEBIDO:"p-info", EM_MONTAGEM:"p-default", ENVIADO:"p-default", AGUARDANDO_RET:"p-warn", ACEITO:"p-success", REJEITADO:"p-danger"})[st] || "p-default"; }
+function statCard(title,val,clsName){
+  const wrap = el("div",{class:"stat"});
+  wrap.append(el("div",{style:"color:#64748b;font-size:12px"}, title));
+  wrap.append(el("div",{class:"v"}, String(val)));
+  wrap.append(el("div",{class:"pill "+clsName, style:"margin-top:6px"}, "indicador"));
+  return wrap;
+}
+
+function renderDashboard(){
+  const aVencer = STATE.cases.filter(c=> new Date(c.sla)-Date.now()<24*HOUR && ["RECEBIDO","EM_MONTAGEM"].includes(c.status)).length;
+  const atras = STATE.cases.filter(c=> new Date(c.sla)-Date.now()<0 && ["RECEBIDO","EM_MONTAGEM"].includes(c.status)).length;
+  const pendRet = STATE.cases.filter(c=> c.status==="AGUARDANDO_RET").length;
+
+  const root = el("div");
+  const stats = el("div",{class:"grid g-3"});
+  stats.append(
+    statCard("A vencer (24h)", aVencer, "p-warn"),
+    statCard("Atrasados", atras, "p-danger"),
+    statCard("Aguardando RET", pendRet, "p-info"),
+  );
+  root.append(el("div",{class:"grid g-3"}, stats, statCard("Total de casos", STATE.cases.length, "p-default")));
+  root.append(el("div",{class:"card", style:"margin-top:10px"}, el("h2",{},"Fila do time"), renderCaseTable(STATE.cases)));
+  return root;
+}
+
+function renderInbox(){
+  const root = el("div");
+  const filtros = el("div",{class:"toolbar card"});
+  const tipoSel = el("select",{}, el("option",{value:""},"— tipo —"), ...["101","103","105","107","109"].map(v=>el("option",{value:v}, "Tipo "+v)));
+  const statusSel = el("select",{}, el("option",{value:""},"— status —"), ...["RECEBIDO","EM_MONTAGEM","ENVIADO","AGUARDANDO_RET","ACEITO","REJEITADO","CONCLUIDO"].map(v=>el("option",{value:v}, v)));
+  const btnClear = el("button",{class:"btn ghost", onclick:()=>{ tipoSel.value=""; statusSel.value=""; render(); }}, "Limpar filtros");
+  filtros.append(tipoSel, statusSel, btnClear);
+  root.append(filtros);
+
+  const rows = STATE.cases.filter(c => (!tipoSel.value || c.tipo===tipoSel.value) && (!statusSel.value || c.status===statusSel.value));
+  root.append(el("div",{class:"card", style:"margin-top:10px"}, renderCaseTable(rows)));
+  return root;
+}
+
+function renderCaseTable(rows){
+  const t = el("table");
+  t.append(el("thead",{}, el("tr",{},
+    el("th",{},"EO-CASE-ID"),
+    el("th",{},"Tipo"),
+    el("th",{},"Título"),
+    el("th",{},"ID Controle"),
+    el("th",{},"SLA"),
+    el("th",{},"Status"),
+    el("th",{},"Ações")
+  )));
+  const tb = el("tbody");
+  rows.forEach(c=>{
+    const sla = fmtSLA(c.sla);
+    tb.append(el("tr",{},
+      el("td",{}, el("span",{class:"mono"}, c.eoCaseId)),
+      el("td",{}, el("span",{class:"mono"}, c.tipo)),
+      el("td",{}, c.titulo),
+      el("td",{}, el("span",{class:"mono"}, firstIdControle(c))),
+      el("td",{}, el("span",{class:"pill "+(sla.late?"p-danger":"p-warn")}, sla.text)),
+      el("td",{}, el("span",{class:"pill "+statusKind(c.status)}, c.status)),
+      el("td",{}, el("button",{class:"btn soft", onclick:()=>openCase(c.id)}, "Abrir caso"))
+    ));
+  });
+  t.append(tb);
+  return t;
+}
+function firstIdControle(c){
+  const r = c.recebidos||{};
+  return r.idControleConsulta || r.idControleTrava || r.idControleLiquidacao || (r.dadosLiberacao&&r.dadosLiberacao.idControleLiberacao) || "—";
+}
+
+/** ------------------ CASE VIEW ------------------ **/
+function openCase(id){ STATE.selectedId=id; STATE.tab="case"; render(); }
+
+function renderCase(){
+  const c = STATE.cases.find(x=>x.id===STATE.selectedId);
+  if(!c) return el("div",{}, "Selecione um caso na Inbox.");
+  const recebidos = c.recebidos || {};
+  const respType = RESPONSE_MAP[c.tipo] || (c.tipo==="109" ? "109" : null);
+
+  // estado local do formulário (simples)
+  const form = shallow((renderCase._forms = renderCase._forms || {})[c.id] || (c.tipo==="109" ? { garantidor:{}, instituicoesFinanceiras:[], tipoEnvioArquivos:"ANEXO" } : {}));
+
+  function saveForm(next){ renderCase._forms[c.id]=next; render(); }
+  function updateCase(patch){ Object.assign(c, patch); render(); }
+  function addEvent(kind,note){ c.events.push({ at:new Date().toISOString(), kind, note }); }
+
+  function copiarRecebidos(){
+    const next = shallow(form);
+    if(c.tipo==="101" && respType==="102"){
+      next.idControleConsulta = recebidos.idControleConsulta;
+      next.processoSusep = { fundosInvestimentos: [] };
+    }
+    if(c.tipo==="103" && respType==="104"){
+      next.idControleTrava = recebidos.idControleTrava;
+      next.idGarantia = recebidos.idGarantia;
+      next.informacoesGarantia = recebidos.informacoesGarantia;
+    }
+    if(c.tipo==="105" && respType==="106"){
+      next.idControleLiquidacao = recebidos.idControleLiquidacao;
+      next.informacoesGarantia = recebidos.informacoesGarantia;
+    }
+    if(c.tipo==="107" && respType==="108"){
+      next.idControleLiberacao = recebidos?.dadosLiberacao?.idControleLiberacao;
+      next.tipoEnvioArquivos = recebidos?.dadosLiberacao?.tipoEnvioArquivos;
+      next.informacoesGarantia = recebidos?.informacoesGarantia;
+    }
+    saveForm(next);
+  }
+  function validate(){ return validateByType(respType, recebidos, form); }
+  function send(){
+    const errs = validate();
+    if(Object.keys(errs).length){ alert("Ajuste os campos obrigatórios antes do envio."); return; }
+    updateCase({ status:"AGUARDANDO_RET" });
+    addEvent("ENVIADO", `Enviado ${respType}`);
+    alert(`Enviado ${respType}. Aguardando retorno...`);
+  }
+  function simulateRET(ok){
+    updateCase({ status: ok?"ACEITO":"REJEITADO" });
+    addEvent(ok?"RET_SUCCESS":"RET_FAIL", `${respType} ${ok?"aceito":"rejeitado"}`);
+    alert(`RET: ${ok?"ACEITO":"REJEITADO"}`);
+  }
+  function reopen(){
+    updateCase({ status:"EM_MONTAGEM" });
+    addEvent("REABERTO", `Caso reaberto para correção`);
+  }
+
+  // Header do caso
+  const header = el("div",{class:"card"},
+    el("div",{class:"toolbar"},
+      el("button",{class:"btn ghost", onclick:()=>setTab("inbox")},"⟵ Voltar"),
+      el("div",{style:"flex:1"}),
+      chip("EO-CASE-ID", c.eoCaseId),
+      recebidos.idControleConsulta && chip("idControleConsulta", recebidos.idControleConsulta),
+      recebidos.idControleTrava && chip("idControleTrava", recebidos.idControleTrava),
+      recebidos.idControleLiquidacao && chip("idControleLiquidacao", recebidos.idControleLiquidacao),
+      (recebidos.dadosLiberacao?.idControleLiberacao) && chip("idControleLiberacao", recebidos.dadosLiberacao.idControleLiberacao),
+      (recebidos.idGarantia?.[0]) && chip("idGarantia", recebidos.idGarantia[0])
+    )
+  );
+
+  // Painel esquerdo (Dados Recebidos)
+  const left = el("div",{class:"card"},
+    el("div",{style:"display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"},
+      el("h3",{}, `Dados Recebidos (Tipo ${c.tipo})`),
+      pill("Somente leitura","p-info")
+    ),
+    renderRecebidosResumo(c.tipo, recebidos)
+  );
+
+  // Painel direito (EO)
+  const rightInner = el("div");
+  rightInner.append(el("div",{style:"display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"},
+    el("h3",{}, `Preencher para Envio (${respType||"—"})`),
+    pill("Pré-envio","p-default")
+  ));
+  if(respType==="102") rightInner.append(Form102(recebidos, form, saveForm));
+  if(respType==="104") rightInner.append(Form104(form, saveForm));
+  if(respType==="106") rightInner.append(Form106(form, saveForm));
+  if(respType==="108") rightInner.append(Form108(recebidos, form, saveForm));
+  if(respType==="109") rightInner.append(Form109(form, saveForm));
+
+  // Erros (amigável)
+  const errs = validate();
+  if(Object.keys(errs).length){
+    rightInner.append(
+      el("div",{class:"card", style:"background:#fff1f2;border-color:#fecdd3"},
+        el("div",{style:"color:#be123c;font-weight:700;margin-bottom:6px"},"Campos pendentes"),
+        el("ul",{}, ...Object.entries(errs).map(([k,v])=> el("li",{}, v)))
+      )
+    );
+  }
+
+  const sendBtn = el("button",{class:"btn primary", onclick:send, disabled:!respType}, `Enviar ${respType||""}`);
+  const simOk = el("button",{class:"btn soft", onclick:()=>simulateRET(true), disabled:c.status!=="AGUARDANDO_RET"},"Simular RET: ACEITO");
+  const simFail = el("button",{class:"btn soft", onclick:()=>simulateRET(false), disabled:c.status!=="AGUARDANDO_RET"},"Simular RET: REJEITADO");
+  const btnReopen = el("button",{class:"btn ghost", onclick:reopen, disabled:!(c.status==="REJEITADO")},"Reabrir para correção");
+  rightInner.append(el("div",{class:"toolbar", style:"margin-top:8px"}, sendBtn, simOk, simFail, btnReopen));
+
+  const right = el("div",{class:"card"}, rightInner);
+
+  // Linha do tempo
+  const timeline = el("div",{class:"card"},
+    el("h3",{},"Linha do tempo do caso"),
+    el("div",{class:"timeline"},
+      ...c.events.map(ev => el("div",{class:"titem"},
+        el("div",{}, el("strong",{}, ev.kind.replace("_"," ")), " — ", ev.note||""),
+        el("div",{style:"color:#64748b;font-size:12px"}, fmtH(ev.at))
+      ))
+    )
+  );
+
+  // actions de atalho
+  const actionsBar = el("div",{class:"toolbar", style:"margin:10px 0"},
+    (c.tipo!=="109") && el("button",{class:"btn soft", onclick:copiarRecebidos},"Copiar recebidos"),
+    el("button",{class:"btn soft", onclick:createOutbound109},"+ Criar Aviso 109 (outbound)")
+  );
+
+  const root = el("div");
+  root.append(header);
+  root.append(el("div",{class:"split"}, left, right));
+  root.append(actionsBar);
+  root.append(timeline);
+  return root;
+
+  function createOutbound109(){
+    const id = "EO-" + new Date().getFullYear() + "-" + String(Math.floor(Math.random()*9000)+1000);
+    const item = newCase(id, "109", "Aviso de Falecimento", {}, dueIn(72));
+    item.status = "EM_MONTAGEM";
+    item.events.push({ at:new Date().toISOString(), kind:"CRIADO", note:"109 criado pela EO" });
+    STATE.cases = [item, ...STATE.cases];
+    STATE.selectedId = item.id;
+    STATE.tab = "case";
+    render();
+  }
+}
+
+/** ------------------ RESUMO AMIGÁVEL DOS DADOS RECEBIDOS ------------------ **/
+function renderRecebidosResumo(tipo, r){
+  const wrap = el("div");
+  if(!r || Object.keys(r).length===0){
+    return el("div",{class:"empty"},"Sem dados recebidos para este tipo.");
+  }
+
+  // Blocos comuns
+  const entEO = r.informacoesGarantia?.entidadeOperadora;
+  const entIF = r.instituicaoFinanceira || r.dadosLiberacao?.instituicaoFinanceira;
+  const garantidor = r.informacoesGarantia?.garantidor;
+
+  // Cabeçalho
+  const cab = el("div",{class:"card"},
+    el("h3",{},"Identificadores"),
+    kv("Tipo", tipo),
+    r.idControleConsulta && kv("idControleConsulta", r.idControleConsulta),
+    r.idControleTrava && kv("idControleTrava", r.idControleTrava),
+    r.idControleLiquidacao && kv("idControleLiquidacao", r.idControleLiquidacao),
+    r.dadosLiberacao?.idControleLiberacao && kv("idControleLiberacao", r.dadosLiberacao.idControleLiberacao),
+    Array.isArray(r.idGarantia)&&r.idGarantia.length>0 ? kv("idGarantia", r.idGarantia.join(", ")) : null
+  );
+  wrap.append(cab);
+
+  // Entidades
+  const ent = el("div",{class:"card"},
+    el("h3",{},"Entidades"),
+    entEO ? (kv("EO", entEO.nome), kv("CNPJ EO", entEO.cnpj)) : kv("EO","—"),
+    entIF ? (kv("IF", entIF.nome), kv("CNPJ IF", entIF.cnpj)) : kv("IF","—"),
+    garantidor ? (kv("Garantidor", garantidor.nome), kv("CPF", garantidor.cpf)) : kv("Garantidor","—")
+  );
+  wrap.append(ent);
+
+  // Específicos por tipo
+  if(tipo==="101"){
+    const ps = r.informacoesGarantia?.processoSusep;
+    const fundos = ps?.fundosInvestimentos||[];
+    const bloco101 = el("div",{class:"card"},
+      el("h3",{},"Consulta de Garantias"),
+      kv("Processo SUSEP", ps?.numero || "—"),
+      el("div",{class:"grid g-2", style:"margin-top:6px"},
+        ...fundos.map(f=> cardMini(
+          f.nome || f.id || "Fundo",
+          [
+            ["Status", f.status||"—"],
+            ...(f.motivoRecusa?[["Motivo de Recusa", f.motivoRecusa]]:[])
+          ]
+        ))
+      )
+    );
+    wrap.append(bloco101);
+  }
+
+  if(tipo==="103"){
+    const blq = r.bloqueio || {};
+    const bloco103 = el("div",{class:"card"},
+      el("h3",{},"Pedido de Trava"),
+      kv("Contrato IF", blq.numeroContratoIF||"—"),
+      kv("Data do Contrato", blq.dataContrato||"—"),
+      kv("Prazo (meses)", blq.prazoMeses!=null? String(blq.prazoMeses):"—")
+    );
+    wrap.append(bloco103);
+  }
+
+  if(tipo==="105"){
+    const bloco105 = el("div",{class:"card"},
+      el("h3",{},"Pedido de Liquidação"),
+      kv("Motivo", r.motivoLiquidacao||"—"),
+      kv("Valor Bruto Solicitado", r.valorBrutoSolicitado!=null ? toMoney(r.valorBrutoSolicitado) : "—"),
+      kv("Liquidação Parcial", boolPt(r.liquidacaoParcial)),
+      kv("Baixa de Contrato", boolPt(r.baixaContrato)),
+      kv("Instrumento Contratual", r.informacoesGarantia?.identificadorInstrumentoContratual || "—")
+    );
+    wrap.append(bloco105);
+  }
+
+  if(tipo==="107"){
+    const dl = r.dadosLiberacao||{};
+    const bloco107 = el("div",{class:"card"},
+      el("h3",{},"Pedido de Liberação"),
+      kv("idControleLiberacao", dl.idControleLiberacao||"—"),
+      kv("Data da Solicitação", dl.dataSolicitacaoLiberacao||"—"),
+      kv("Tipo de envio de arquivos", dl.tipoEnvioArquivos||"—")
+    );
+    wrap.append(bloco107);
+  }
+
+  return wrap;
+
+  function kv(label, value){
+    const row = el("div",{class:"kv"});
+    row.append(el("b",{}, label), el("div",{}, value));
+    return row;
+  }
+  function cardMini(titulo, pares){
+    const c = el("div",{class:"card"});
+    c.append(el("div",{style:"font-weight:600;margin-bottom:4px"}, titulo));
+    pares.forEach(([k,v])=> c.append(kv(k,v)));
+    return c;
+  }
+  function toMoney(n){ return Number(n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+  function boolPt(v){ return v===true?"SIM": v===false?"NÃO":"—"; }
+}
+
+/** ------------------ FORMULÁRIOS (lado EO) ------------------ **/
+function Form102(recebidos, form, setForm){
+  const root = el("div",{class:"card"});
+  root.append(labelInput("Data da consulta *", input(form.dataConsulta, v=>upd("dataConsulta", v),"date")));
+  root.append(el("h3",{},"Fundos de Investimento"));
+  const listWrap = el("div"); root.append(listWrap);
+  root.append(el("div",{style:"margin-top:8px"}, el("button",{class:"btn soft", onclick:()=> {
+    const arr = (form.processoSusep?.fundosInvestimentos)||[];
+    upd("processoSusep", { ...(form.processoSusep||{}), fundosInvestimentos:[...arr, { status:"SUCCESS"}] });
+  }},"+ Adicionar fundo")));
+  draw(); return root;
+
+  function draw(){
+    listWrap.innerHTML = "";
+    const arr = (form.processoSusep?.fundosInvestimentos)||[];
+    arr.forEach((f,idx)=>{
+      listWrap.append(
+        el("div",{class:"card", style:"border-style:dashed"},
+          labelInput("Identificação", input(f.id, v=>setFund(idx,"id",v))),
+          labelInput("Nome", input(f.nome, v=>setFund(idx,"nome",v))),
+          labelInput("Status *", select(f.status, v=>setFund(idx,"status",v), ["SUCCESS","FAIL"])),
+          (f.status==="FAIL") && labelInput("Motivo de Recusa *", input(f.motivoRecusa, v=>setFund(idx,"motivoRecusa",v)))
+        )
+      );
+    });
+  }
+  function setFund(i,k,v){
+    const arr = (form.processoSusep?.fundosInvestimentos)||[];
+    const next = arr.map((it,ix)=> ix===i ? {...it, [k]:v} : it);
+    upd("processoSusep", { ...(form.processoSusep||{}), fundosInvestimentos: next }); draw();
+  }
+  function upd(path,val){ const next=shallow(form); next[path]=val; setForm(next); }
+}
+
+function Form104(form, setForm){
+  const root = el("div",{class:"card"});
+  root.append(
+    labelInput("Data do bloqueio *", input(form.dataBloqueio, v=>upd("dataBloqueio", v), "date")),
+    labelInput("Valor bruto bloqueado *", input(form.valorBrutoBloqueado, v=>upd("valorBrutoBloqueado", Number(v)), "number")),
+    labelInput("Ordem de prioridade *", input(form.prioridade, v=>upd("prioridade", v)))
+  );
+  root.append(labelInput("Observações", textarea(form.obs, v=>upd("obs", v))));
+  return root; function upd(k,v){ const n=shallow(form); n[k]=v; setForm(n); }
+}
+
+function Form106(form, setForm){
+  const root = el("div",{class:"card"});
+  root.append(
+    labelInput("Data da liquidação *", input(form.dataLiquidacao, v=>upd("dataLiquidacao", v), "date")),
+    labelInput("Previsão de pagamento *", input(form.previsaoPagamento, v=>upd("previsaoPagamento", v), "date")),
+    labelInput("Valor líquido previsto *", input(form.valorLiquidoPrevisto, v=>upd("valorLiquidoPrevisto", Number(v)), "number"))
+  );
+  return root; function upd(k,v){ const n=shallow(form); n[k]=v; setForm(n); }
+}
+
+function Form108(recebidos, form, setForm){
+  const root = el("div",{class:"card"});
+  root.append(
+    labelInput("Valor bruto solicitado *", input(form.valorBrutoSolicitado, v=>upd("valorBrutoSolicitado", Number(v)), "number")),
+    labelInput("Liberação parcial *", select(form.liberacaoParcial, v=>upd("liberacaoParcial", v), ["SIM","NAO"])),
+    labelInput("Baixa do contrato *", select(form.baixaContrato, v=>upd("baixaContrato", v), ["SIM","NAO"])),
+    labelInput("Data de desbloqueio *", input(form.dataRealizacaoDesbloqueio, v=>upd("dataRealizacaoDesbloqueio", v), "date")),
+    labelInput("Status *", select(form.status, v=>upd("status", v), ["SUCCESS","FAIL"])),
+    (form.status==="FAIL") && labelInput("Motivo de recusa *", input(form.motivoRecusa, v=>upd("motivoRecusa", v)))
+  );
+  return root; function upd(k,v){ const n=shallow(form); n[k]=v; setForm(n); }
+}
+
+function Form109(form, setForm){
+  const root = el("div",{class:"card"});
+  root.append(el("h3",{},"Garantidor"));
+  root.append(
+    labelInput("Nome *", input(form?.garantidor?.nome, v=>setp("garantidor.nome", v))),
+    labelInput("CPF *", input(form?.garantidor?.cpf, v=>setp("garantidor.cpf", v))),
+    labelInput("Tipo de envio de arquivos *", select(form?.tipoEnvioArquivos, v=>setp("tipoEnvioArquivos", v), ["ANEXO","UPLOAD","GERACAO_PDF"]))
+  );
+  if(form?.tipoEnvioArquivos==="GERACAO_PDF"){
+    root.append(labelInput("Endereço completo (para geração de PDF) *", input(form?.enderecoCompleto, v=>setp("enderecoCompleto", v))));
+  }
+  root.append(el("h3",{},"Instituições Financeiras"));
+  const list = el("div"); root.append(list); drawIFs();
+  root.append(el("div",{style:"margin-top:8px"}, el("button",{class:"btn soft", onclick:()=>{ const l=form.instituicoesFinanceiras||[]; setForm({...form, instituicoesFinanceiras:[...l,{nome:"",cnpj:""}]}); drawIFs(); }},"+ Adicionar IF")));
+  return root;
+  function drawIFs(){
+    list.innerHTML="";
+    (form.instituicoesFinanceiras||[]).forEach((it,idx)=>{
+      list.append(el("div",{class:"card", style:"border-style:dashed"},
+        labelInput("Nome *", input(it.nome, v=>setIF(idx,"nome",v))),
+        labelInput("CNPJ *", input(it.cnpj, v=>setIF(idx,"cnpj",v)))
+      ));
+    });
+    if((form.instituicoesFinanceiras||[]).length===0) list.append(el("div",{class:"empty"},"Nenhuma IF adicionada"));
+  }
+  function setIF(i,k,v){ const l=form.instituicoesFinanceiras||[]; const next=l.map((it,ix)=> ix===i? {...it,[k]:v}:it); setForm({...form, instituicoesFinanceiras:next}); drawIFs(); }
+  function setp(path, v){
+    const next = shallow(form); const parts = path.split(".");
+    let ref = next; for(let i=0;i<parts.length-1;i++){ ref[parts[i]] = ref[parts[i]] || {}; ref = ref[parts[i]]; }
+    ref[parts.at(-1)] = v; setForm(next);
+  }
+}
+
+/** ------------------ SMALL UI HELPERS ------------------ **/
+function labelInput(labelTxt, inputEl){ const w=el("div"); w.append(el("label",{}, labelTxt), inputEl); return w; }
+function input(val,on, type="text",ph=""){ const i=el("input",{value:val??"",type}); if(ph) i.placeholder=ph; i.addEventListener("input", e=>on(type==="number"? Number(e.target.value): e.target.value)); return i; }
+function select(val,on, options){ const s=el("select",{}, el("option",{value:""},"— selecione —"), ...options.map(o=>el("option",{value:o}, o))); s.value=val??""; s.addEventListener("change", e=>on(e.target.value)); return s; }
+function textarea(val,on){ const t=el("textarea",{rows:3}); t.value=val??""; t.addEventListener("input", e=>on(e.target.value)); return t; }
+function pill(txt, cls){ return el("span", { class: "pill " + cls }, txt);
+}
+
+
+/** ------------------ SLA TICK ------------------ **/
+setInterval(()=>{ if(STATE.tab==="dashboard" || STATE.tab==="inbox"){ render(); } }, 1000);
+
+/** ------------------ INIT ------------------ **/
+render();
+</script>
+</body>
+</html>
